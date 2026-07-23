@@ -28,7 +28,7 @@ fn db(value: f64) -> f64 {
 }
 
 /// Decode one local file and measure it with the ITU-R BS.1770 / EBU R128 algorithm.
-fn measure_file(path: &Path) -> Result<Analysis, String> {
+fn measure_file(mut progress: impl FnMut(u8), path: &Path) -> Result<Analysis, String> {
     let file = File::open(path).map_err(|e| format!("Unable to open file: {e}"))?;
     let mss = MediaSourceStream::new(Box::new(file), Default::default());
     let hint = Hint::new();
@@ -43,6 +43,7 @@ fn measure_file(path: &Path) -> Result<Analysis, String> {
     let mut format = probed.format;
     let track = format.default_track().ok_or("No audio track was found")?;
     let track_id = track.id;
+    let total_frames = track.codec_params.n_frames;
     let sample_rate = track
         .codec_params
         .sample_rate
@@ -65,6 +66,8 @@ fn measure_file(path: &Path) -> Result<Analysis, String> {
     )
     .map_err(|e| format!("Could not initialize loudness meter: {e}"))?;
     let mut duration_frames: u64 = 0;
+    let mut last_progress = 0;
+    progress(2);
 
     loop {
         let packet = match format.next_packet() {
@@ -84,6 +87,15 @@ fn measure_file(path: &Path) -> Result<Analysis, String> {
             Err(err) => return Err(format!("Error decoding audio: {err}")),
         };
         duration_frames += decoded.frames() as u64;
+        if let Some(total_frames) = total_frames {
+            let percentage =
+                ((duration_frames.saturating_mul(95) / total_frames.max(1)) + 2).min(97) as u8;
+            // Avoid flooding the WebView event queue while still making the bar feel live.
+            if percentage >= last_progress + 1 {
+                progress(percentage);
+                last_progress = percentage;
+            }
+        }
         let mut samples = SampleBuffer::<f32>::new(decoded.capacity() as u64, *decoded.spec());
         samples.copy_interleaved_ref(decoded);
         meter
@@ -99,6 +111,7 @@ fn measure_file(path: &Path) -> Result<Analysis, String> {
     for channel in 0..channels {
         true_peak = true_peak.max(meter.true_peak(channel).unwrap_or(0.0));
     }
+    progress(100);
     Ok(Analysis {
         integrated_lufs,
         loudness_range,
@@ -110,8 +123,17 @@ fn measure_file(path: &Path) -> Result<Analysis, String> {
 }
 
 #[tauri::command]
-fn analyze_audio(path: String) -> Result<Analysis, String> {
-    measure_file(Path::new(&path))
+async fn analyze_audio(window: tauri::Window, path: String) -> Result<Analysis, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        measure_file(
+            |percentage| {
+                let _ = window.emit("analysis-progress", percentage);
+            },
+            Path::new(&path),
+        )
+    })
+    .await
+    .map_err(|error| format!("Analysis task failed: {error}"))?
 }
 
 fn main() {

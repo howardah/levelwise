@@ -2,6 +2,7 @@
 import { computed, ref } from "vue";
 import { open } from "@tauri-apps/api/dialog";
 import { invoke } from "@tauri-apps/api/tauri";
+import { listen } from "@tauri-apps/api/event";
 
 type Result = { service: string; target: number; note: string; color: string };
 
@@ -45,14 +46,17 @@ function dropFile() {
 
 async function analyze(path: string) {
   error.value = "";
-  selectedFile.value = { name: path.split(/[\\/]/).pop() ?? path, path }; processing.value = true; progress.value = 12;
+  selectedFile.value = { name: path.split(/[\\/]/).pop() ?? path, path }; processing.value = true; progress.value = 0;
+  const unlisten = await listen<number>("analysis-progress", ({ payload }) => { progress.value = payload; });
+  // Some compressed files do not expose a total frame count. Keep their progress indicator alive
+  // until the backend supplies the final result.
+  const fallbackProgress = window.setInterval(() => { if (progress.value < 90) progress.value += 1; }, 700);
   try {
-    progress.value = 35;
     const result = await invoke<Analysis>("analyze_audio", { path });
-    progress.value = 90; duration.value = result.durationSeconds; integrated.value = result.integratedLufs; peak.value = result.truePeakDbtp; lra.value = result.loudnessRange; progress.value = 100;
+    duration.value = result.durationSeconds; integrated.value = result.integratedLufs; peak.value = result.truePeakDbtp; lra.value = result.loudnessRange; progress.value = 100;
   } catch (reason) {
     error.value = typeof reason === "string" ? reason : "This file could not be decoded."; selectedFile.value = null;
-  } finally { setTimeout(() => { processing.value = false; }, 300); }
+  } finally { window.clearInterval(fallbackProgress); unlisten(); setTimeout(() => { processing.value = false; }, 300); }
 }
 
 function reset() { selectedFile.value = null; integrated.value = peak.value = lra.value = null; duration.value = 0; error.value = ""; }
