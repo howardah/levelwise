@@ -4,11 +4,17 @@ import { open } from "@tauri-apps/api/dialog";
 import { convertFileSrc, invoke } from "@tauri-apps/api/tauri";
 import { listen } from "@tauri-apps/api/event";
 import { appWindow } from "@tauri-apps/api/window";
+import {
+  audioExtensions,
+  fileName,
+  formatDb,
+  formatDuration,
+  gainAdjustment,
+  streamingServices,
+  type Analysis,
+  type Recording,
+} from "./lib/loudness";
 
-type Result = { service: string; target: number; note: string; color: string; canBoost: boolean };
-
-type Analysis = { integratedLufs: number; loudnessRange: number; truePeakDbtp: number; durationSeconds: number; sampleRate: number; channels: number };
-type Recording = Analysis & { name: string; path: string };
 const selectedFile = ref<{ name: string; path: string } | null>(null);
 const recordings = ref<Recording[]>([]);
 const batchIndex = ref(0);
@@ -28,32 +34,22 @@ let unlistenFileDrop: (() => void) | undefined;
 let audioContext: AudioContext | undefined;
 let gainNode: GainNode | undefined;
 
-const services: Result[] = [
-  { service: "Spotify", target: -14, note: "Normal", color: "#8de36a", canBoost: true },
-  { service: "Apple Music", target: -16, note: "Sound Check", color: "#ff9d85", canBoost: true },
-  { service: "YouTube", target: -14, note: "Music", color: "#fa6b7e", canBoost: false },
-  { service: "TIDAL", target: -14, note: "Normal", color: "#c4b5fd", canBoost: false },
-  { service: "Amazon Music", target: -14, note: "Normalization", color: "#65c8ff", canBoost: false },
-  { service: "Deezer", target: -15, note: "Normalization", color: "#f6ba65", canBoost: true },
-];
-
-const adjustment = (target: number, canBoost: boolean, loudness = integrated.value) => loudness === null ? 0 : canBoost ? target - loudness : Math.min(0, target - loudness);
-const displayDb = (value: number | null, suffix = "") => value === null ? "—" : `${value >= 0 ? "+" : ""}${value.toFixed(1)}${suffix}`;
-const selectedPenalty = computed(() => { const service = services.find(s => s.service === selectedService.value) ?? services[0]; return adjustment(service.target, service.canBoost); });
-const audioSource = computed(() => selectedFile.value ? convertFileSrc(selectedFile.value.path) : "");
-const durationText = computed(() => {
-  const minutes = Math.floor(duration.value / 60); const seconds = Math.round(duration.value % 60);
-  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+const adjustment = (target: number, canBoost: boolean, loudness = integrated.value) => gainAdjustment(target, canBoost, loudness);
+const selectedPenalty = computed(() => {
+  const service = streamingServices.find(({ service }) => service === selectedService.value) ?? streamingServices[0];
+  return adjustment(service.target, service.canBoost);
 });
+const audioSource = computed(() => selectedFile.value ? convertFileSrc(selectedFile.value.path) : "");
+const durationText = computed(() => formatDuration(duration.value));
 
 async function chooseFile() {
-  const paths = await open({ multiple: true, filters: [{ name: "Audio", extensions: ["wav", "aiff", "mp3", "m4a", "aac", "flac", "ogg"] }] });
+  const paths = await open({ multiple: true, filters: [{ name: "Audio", extensions: audioExtensions }] });
   if (typeof paths === "string") analyzeBatch([paths]);
   else if (Array.isArray(paths)) analyzeBatch(paths);
 }
 async function analyzeFile(path: string) {
   error.value = "";
-  const name = path.split(/[\\/]/).pop() ?? path;
+  const name = fileName(path);
   selectedFile.value = { name, path }; integrated.value = peak.value = lra.value = null; progress.value = 0;
   const unlisten = await listen<number>("analysis-progress", ({ payload }) => { progress.value = payload; });
   // Some compressed files do not expose a total frame count. Keep their progress indicator alive
@@ -147,24 +143,24 @@ onBeforeUnmount(() => { unlistenFileDrop?.(); audioContext?.close(); });
       <div v-if="processing" class="processing" :class="{ 'processing-inline': recordings.length }"><div class="progress"><i :style="{ width: progress + '%' }"></i></div><span>Analyzing {{ batchTotal > 1 ? `recording ${batchIndex} of ${batchTotal}` : 'your master' }} locally… {{ progress }}%</span></div>
       <template v-if="!processing || recordings.length">
         <div class="metrics">
-          <article><p>INTEGRATED LOUDNESS</p><strong>{{ displayDb(integrated, ' LUFS') }}</strong><span>Gated EBU R128 measurement</span></article>
-          <article><p>TRUE PEAK</p><strong>{{ displayDb(peak, ' dBTP') }}</strong><span>4× oversampled peak scan</span></article>
+          <article><p>INTEGRATED LOUDNESS</p><strong>{{ formatDb(integrated, ' LUFS') }}</strong><span>Gated EBU R128 measurement</span></article>
+          <article><p>TRUE PEAK</p><strong>{{ formatDb(peak, ' dBTP') }}</strong><span>4× oversampled peak scan</span></article>
           <article><p>LOUDNESS RANGE</p><strong>{{ lra?.toFixed(1) ?? '—' }} <b>LU</b></strong><span>EBU Tech 3342 range</span></article>
         </div>
         <div v-if="recordings.length > 1" class="comparison">
           <div class="comparison-head"><div><p class="eyebrow">BATCH COMPARISON</p><h2>{{ recordings.length }} recordings</h2></div><span>Click a recording to inspect and preview it.</span></div>
           <button v-for="recording in recordings" :key="recording.path" class="recording-row" :class="{ active: selectedFile?.path === recording.path }" @click="selectRecording(recording)">
-            <strong>{{ recording.name }}</strong><span>{{ displayDb(recording.integratedLufs, ' LUFS') }}</span><span>{{ displayDb(recording.truePeakDbtp, ' dBTP') }}</span><span>{{ recording.loudnessRange.toFixed(1) }} LU</span>
+            <strong>{{ recording.name }}</strong><span>{{ formatDb(recording.integratedLufs, ' LUFS') }}</span><span>{{ formatDb(recording.truePeakDbtp, ' dBTP') }}</span><span>{{ recording.loudnessRange.toFixed(1) }} LU</span>
           </button>
         </div>
         <div class="section-title"><div><p class="eyebrow">NORMALIZATION PREVIEW</p><h2>Streaming service impact</h2></div><p>Estimated gain adjustment relative to each<br />platform’s standard playback level.</p></div>
         <div class="service-grid">
-          <button v-for="item in services" :key="item.service" class="service" :class="{ active: selectedService === item.service }" @click="selectedService = item.service">
-            <span class="service-dot" :style="{ background: item.color }"></span><div><strong>{{ item.service }}</strong><small>{{ item.note }} · {{ item.target }} LUFS</small></div><b :class="{ neutral: adjustment(item.target, item.canBoost) === 0, boost: adjustment(item.target, item.canBoost) > 0 }">{{ displayDb(adjustment(item.target, item.canBoost), ' dB') }}</b>
+          <button v-for="item in streamingServices" :key="item.service" class="service" :class="{ active: selectedService === item.service }" @click="selectedService = item.service">
+            <span class="service-dot" :style="{ background: item.color }"></span><div><strong>{{ item.service }}</strong><small>{{ item.note }} · {{ item.target }} LUFS</small></div><b :class="{ neutral: adjustment(item.target, item.canBoost) === 0, boost: adjustment(item.target, item.canBoost) > 0 }">{{ formatDb(adjustment(item.target, item.canBoost), ' dB') }}</b>
           </button>
         </div>
         <div class="preview">
-          <div><p class="eyebrow">NORMALIZATION REFERENCE</p><h3>{{ selectedService }} would apply {{ displayDb(selectedPenalty, ' dB') }}</h3><span>Results are calculated locally against the platform target.</span></div>
+          <div><p class="eyebrow">NORMALIZATION REFERENCE</p><h3>{{ selectedService }} would apply {{ formatDb(selectedPenalty, ' dB') }}</h3><span>Results are calculated locally against the platform target.</span></div>
           <div class="wave"><i v-for="n in 32" :key="n" :style="{ height: (20 + ((n * 31) % 58)) + '%' }"></i></div>
           <button class="play" :aria-label="isPreviewing ? 'Pause preview' : 'Play normalized preview'" @click="togglePreview">{{ isPreviewing ? 'Ⅱ' : '▶' }}</button>
           <audio ref="player" :src="audioSource" @play="isPreviewing = true" @pause="isPreviewing = false" @ended="isPreviewing = false"></audio>

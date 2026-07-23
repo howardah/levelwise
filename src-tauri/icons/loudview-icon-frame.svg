@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1254" height="1254" viewBox="0 0 1254 1254">
+  <defs>
+    <clipPath id="rounded-tile">
+      <rect x="82" y="82" width="1090" height="1090" rx="218" ry="218" />
+    </clipPath>
+  </defs>
+  <image href="file:///Users/innocentsmith/Dev/tauri/loudness/src-tauri/icons/loudview-icon-artwork.png" x="82" y="82" width="1090" height="1090" preserveAspectRatio="none" clip-path="url(#rounded-tile)" />
+</svg>
