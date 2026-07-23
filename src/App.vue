@@ -53,7 +53,8 @@ async function chooseFile() {
 }
 async function analyzeFile(path: string) {
   error.value = "";
-  selectedFile.value = { name: path.split(/[\\/]/).pop() ?? path, path }; processing.value = true; progress.value = 0;
+  const name = path.split(/[\\/]/).pop() ?? path;
+  selectedFile.value = { name, path }; integrated.value = peak.value = lra.value = null; progress.value = 0;
   const unlisten = await listen<number>("analysis-progress", ({ payload }) => { progress.value = payload; });
   // Some compressed files do not expose a total frame count. Keep their progress indicator alive
   // until the backend supplies the final result.
@@ -61,17 +62,18 @@ async function analyzeFile(path: string) {
   try {
     const result = await invoke<Analysis>("analyze_audio", { path });
     duration.value = result.durationSeconds; integrated.value = result.integratedLufs; peak.value = result.truePeakDbtp; lra.value = result.loudnessRange; progress.value = 100;
-    recordings.value.push({ name: selectedFile.value?.name ?? path, path, ...result });
+    recordings.value.push({ name, path, ...result });
   } catch (reason) {
     error.value = typeof reason === "string" ? reason : "This file could not be decoded."; selectedFile.value = null;
-  } finally { window.clearInterval(fallbackProgress); unlisten(); setTimeout(() => { processing.value = false; }, 300); }
+  } finally { window.clearInterval(fallbackProgress); unlisten(); }
 }
 async function analyzeBatch(paths: string[]) {
   const uniquePaths = [...new Set(paths)];
   if (!uniquePaths.length) return;
-  recordings.value = []; batchTotal.value = uniquePaths.length; batchIndex.value = 0;
-  for (const [index, path] of uniquePaths.entries()) { batchIndex.value = index + 1; await analyzeFile(path); }
-  batchTotal.value = 0;
+  recordings.value = []; batchTotal.value = uniquePaths.length; batchIndex.value = 0; processing.value = true;
+  try {
+    for (const [index, path] of uniquePaths.entries()) { batchIndex.value = index + 1; await analyzeFile(path); }
+  } finally { batchTotal.value = 0; processing.value = false; }
 }
 function selectRecording(recording: Recording) {
   selectedFile.value = recording; duration.value = recording.durationSeconds; integrated.value = recording.integratedLufs; peak.value = recording.truePeakDbtp; lra.value = recording.loudnessRange;
@@ -142,8 +144,8 @@ onBeforeUnmount(() => { unlistenFileDrop?.(); audioContext?.close(); });
         <div class="file-icon">♫</div><div><strong>{{ selectedFile.name }}</strong><span>{{ durationText }} · analyzed in Rust</span></div>
         <button class="text-button" @click="reset">Analyze another <span>↗</span></button>
       </div>
-      <div v-if="processing" class="processing"><div class="progress"><i :style="{ width: progress + '%' }"></i></div><span>Analyzing {{ batchTotal > 1 ? `recording ${batchIndex} of ${batchTotal}` : 'your master' }} locally… {{ progress }}%</span></div>
-      <template v-else>
+      <div v-if="processing" class="processing" :class="{ 'processing-inline': recordings.length }"><div class="progress"><i :style="{ width: progress + '%' }"></i></div><span>Analyzing {{ batchTotal > 1 ? `recording ${batchIndex} of ${batchTotal}` : 'your master' }} locally… {{ progress }}%</span></div>
+      <template v-if="!processing || recordings.length">
         <div class="metrics">
           <article><p>INTEGRATED LOUDNESS</p><strong>{{ displayDb(integrated, ' LUFS') }}</strong><span>Gated EBU R128 measurement</span></article>
           <article><p>TRUE PEAK</p><strong>{{ displayDb(peak, ' dBTP') }}</strong><span>4× oversampled peak scan</span></article>
