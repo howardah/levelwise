@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { open } from "@tauri-apps/api/dialog";
-import { invoke } from "@tauri-apps/api/tauri";
+import { convertFileSrc, invoke } from "@tauri-apps/api/tauri";
 import { listen } from "@tauri-apps/api/event";
+import { appWindow } from "@tauri-apps/api/window";
 
 type Result = { service: string; target: number; note: string; color: string };
 
@@ -17,6 +18,9 @@ const integrated = ref<number | null>(null);
 const peak = ref<number | null>(null);
 const lra = ref<number | null>(null);
 const selectedService = ref("Spotify");
+const player = ref<HTMLAudioElement>();
+const isPreviewing = ref(false);
+let unlistenFileDrop: (() => void) | undefined;
 
 const services: Result[] = [
   { service: "Spotify", target: -14, note: "Normal", color: "#8de36a" },
@@ -30,6 +34,7 @@ const services: Result[] = [
 const penalty = (target: number) => integrated.value === null ? 0 : Math.min(0, target - integrated.value);
 const displayDb = (value: number | null, suffix = "") => value === null ? "—" : `${value >= 0 ? "+" : ""}${value.toFixed(1)}${suffix}`;
 const selectedPenalty = computed(() => penalty(services.find(s => s.service === selectedService.value)?.target ?? -14));
+const audioSource = computed(() => selectedFile.value ? convertFileSrc(selectedFile.value.path) : "");
 const durationText = computed(() => {
   const minutes = Math.floor(duration.value / 60); const seconds = Math.round(duration.value % 60);
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
@@ -39,11 +44,6 @@ async function chooseFile() {
   const path = await open({ multiple: false, filters: [{ name: "Audio", extensions: ["wav", "aiff", "mp3", "m4a", "aac", "flac", "ogg"] }] });
   if (typeof path === "string") analyze(path);
 }
-function dropFile() {
-  isDragging.value = false;
-  error.value = "Use Choose audio file to select a local file. Native drag-and-drop is coming next.";
-}
-
 async function analyze(path: string) {
   error.value = "";
   selectedFile.value = { name: path.split(/[\\/]/).pop() ?? path, path }; processing.value = true; progress.value = 0;
@@ -59,7 +59,27 @@ async function analyze(path: string) {
   } finally { window.clearInterval(fallbackProgress); unlisten(); setTimeout(() => { processing.value = false; }, 300); }
 }
 
-function reset() { selectedFile.value = null; integrated.value = peak.value = lra.value = null; duration.value = 0; error.value = ""; }
+function togglePreview() {
+  if (!player.value) return;
+  if (isPreviewing.value) { player.value.pause(); return; }
+  player.value.volume = Math.pow(10, selectedPenalty.value / 20);
+  player.value.play().catch(() => { error.value = "Playback could not start for this file."; });
+}
+function reset() { player.value?.pause(); isPreviewing.value = false; selectedFile.value = null; integrated.value = peak.value = lra.value = null; duration.value = 0; error.value = ""; }
+
+watch(selectedPenalty, (gain) => { if (player.value) player.value.volume = Math.pow(10, gain / 20); });
+onMounted(async () => {
+  unlistenFileDrop = await appWindow.onFileDropEvent(({ payload }) => {
+    if (payload.type === "hover") isDragging.value = true;
+    if (payload.type === "cancel") isDragging.value = false;
+    if (payload.type === "drop") {
+      isDragging.value = false;
+      const path = payload.paths[0];
+      if (path) analyze(path);
+    }
+  });
+});
+onBeforeUnmount(() => unlistenFileDrop?.());
 </script>
 
 <template>
@@ -77,7 +97,7 @@ function reset() { selectedFile.value = null; integrated.value = peak.value = lr
     </section>
 
     <section v-if="!selectedFile" class="upload-shell">
-      <div class="upload-card" :class="{ dragging: isDragging }" @dragover.prevent="isDragging = true" @dragleave.prevent="isDragging = false" @drop.prevent="dropFile">
+      <div class="upload-card" :class="{ dragging: isDragging }">
         <div class="upload-icon"><span>↑</span></div>
         <h2>Drop your master here</h2>
         <p>WAV, AIFF, MP3, AAC, FLAC, or OGG</p>
@@ -109,6 +129,8 @@ function reset() { selectedFile.value = null; integrated.value = peak.value = lr
         <div class="preview">
           <div><p class="eyebrow">NORMALIZATION REFERENCE</p><h3>{{ selectedService }} would apply {{ displayDb(selectedPenalty, ' dB') }}</h3><span>Results are calculated locally against the platform target.</span></div>
           <div class="wave"><i v-for="n in 32" :key="n" :style="{ height: (20 + ((n * 31) % 58)) + '%' }"></i></div>
+          <button class="play" :aria-label="isPreviewing ? 'Pause preview' : 'Play normalized preview'" @click="togglePreview">{{ isPreviewing ? 'Ⅱ' : '▶' }}</button>
+          <audio ref="player" :src="audioSource" @play="isPreviewing = true" @pause="isPreviewing = false" @ended="isPreviewing = false"></audio>
         </div>
         <p class="disclaimer">EBU R128 / ITU-R BS.1770 analysis is performed locally in the Rust backend. No audio leaves your device.</p>
       </template>
