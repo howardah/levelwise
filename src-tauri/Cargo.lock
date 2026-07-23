@@ -1639,6 +1639,7 @@ dependencies = [
  "ebur128",
  "serde",
  "serde_json",
+ "smallvec",
  "symphonia",
  "tauri",
  "tauri-build",

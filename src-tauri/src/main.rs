@@ -4,8 +4,13 @@ use ebur128::{EbuR128, Mode};
 use serde::Serialize;
 use std::{fs::File, path::Path};
 use symphonia::core::{
-    audio::SampleBuffer, codecs::DecoderOptions, errors::Error as SymphoniaError,
-    formats::FormatOptions, io::MediaSourceStream, meta::MetadataOptions, probe::Hint,
+    audio::{AudioBufferRef, SampleBuffer, Signal},
+    codecs::DecoderOptions,
+    errors::Error as SymphoniaError,
+    formats::FormatOptions,
+    io::MediaSourceStream,
+    meta::MetadataOptions,
+    probe::Hint,
 };
 
 #[derive(Serialize)]
@@ -67,6 +72,9 @@ fn measure_file(mut progress: impl FnMut(u8), path: &Path) -> Result<Analysis, S
     .map_err(|e| format!("Could not initialize loudness meter: {e}"))?;
     let mut duration_frames: u64 = 0;
     let mut last_progress = 0;
+    // Most compressed formats decode to f32. Pass those planar buffers straight to the meter;
+    // for other sample formats this buffer is retained and reused rather than allocated per packet.
+    let mut converted_samples: Option<SampleBuffer<f32>> = None;
     progress(2);
 
     loop {
@@ -96,11 +104,36 @@ fn measure_file(mut progress: impl FnMut(u8), path: &Path) -> Result<Analysis, S
                 last_progress = percentage;
             }
         }
-        let mut samples = SampleBuffer::<f32>::new(decoded.capacity() as u64, *decoded.spec());
-        samples.copy_interleaved_ref(decoded);
-        meter
-            .add_frames_f32(samples.samples())
-            .map_err(|e| format!("Loudness measurement failed: {e}"))?;
+        match decoded {
+            AudioBufferRef::F32(buffer) => {
+                let mut planar_samples = smallvec::SmallVec::<[&[f32]; 8]>::new();
+                for channel in 0..channels as usize {
+                    planar_samples.push(buffer.chan(channel));
+                }
+                meter
+                    .add_frames_planar_f32(&planar_samples)
+                    .map_err(|e| format!("Loudness measurement failed: {e}"))?;
+            }
+            decoded => {
+                let required_capacity = decoded.capacity() * channels as usize;
+                if converted_samples
+                    .as_ref()
+                    .is_none_or(|buffer| buffer.capacity() < required_capacity)
+                {
+                    converted_samples = Some(SampleBuffer::<f32>::new(
+                        decoded.capacity() as u64,
+                        *decoded.spec(),
+                    ));
+                }
+                let samples = converted_samples
+                    .as_mut()
+                    .expect("conversion buffer is initialized");
+                samples.copy_interleaved_ref(decoded);
+                meter
+                    .add_frames_f32(samples.samples())
+                    .map_err(|e| format!("Loudness measurement failed: {e}"))?;
+            }
+        }
     }
 
     let integrated_lufs = meter
