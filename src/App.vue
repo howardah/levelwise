@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from "vue";
+import { computed, ref } from "vue";
+import { open } from "@tauri-apps/api/dialog";
+import { invoke } from "@tauri-apps/api/tauri";
 
 type Result = { service: string; target: number; note: string; color: string };
 
-const fileInput = ref<HTMLInputElement>();
-const selectedFile = ref<File | null>(null);
+type Analysis = { integratedLufs: number; loudnessRange: number; truePeakDbtp: number; durationSeconds: number; sampleRate: number; channels: number };
+const selectedFile = ref<{ name: string; path: string } | null>(null);
 const isDragging = ref(false);
 const processing = ref(false);
 const progress = ref(0);
@@ -12,11 +14,8 @@ const error = ref("");
 const duration = ref(0);
 const integrated = ref<number | null>(null);
 const peak = ref<number | null>(null);
-const crest = ref<number | null>(null);
-const audioUrl = ref("");
+const lra = ref<number | null>(null);
 const selectedService = ref("Spotify");
-const player = ref<HTMLAudioElement>();
-const isPreviewing = ref(false);
 
 const services: Result[] = [
   { service: "Spotify", target: -14, note: "Normal", color: "#8de36a" },
@@ -30,57 +29,33 @@ const services: Result[] = [
 const penalty = (target: number) => integrated.value === null ? 0 : Math.min(0, target - integrated.value);
 const displayDb = (value: number | null, suffix = "") => value === null ? "—" : `${value >= 0 ? "+" : ""}${value.toFixed(1)}${suffix}`;
 const selectedPenalty = computed(() => penalty(services.find(s => s.service === selectedService.value)?.target ?? -14));
-const fileSize = computed(() => selectedFile.value ? `${(selectedFile.value.size / 1048576).toFixed(1)} MB` : "");
 const durationText = computed(() => {
   const minutes = Math.floor(duration.value / 60); const seconds = Math.round(duration.value % 60);
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
 });
 
-function chooseFile() { fileInput.value?.click(); }
-function onFileInput(event: Event) {
-  const file = (event.target as HTMLInputElement).files?.[0]; if (file) analyze(file);
+async function chooseFile() {
+  const path = await open({ multiple: false, filters: [{ name: "Audio", extensions: ["wav", "aiff", "mp3", "m4a", "aac", "flac", "ogg"] }] });
+  if (typeof path === "string") analyze(path);
 }
-function dropFile(event: DragEvent) {
-  isDragging.value = false; const file = event.dataTransfer?.files[0]; if (file) analyze(file);
+function dropFile() {
+  isDragging.value = false;
+  error.value = "Use Choose audio file to select a local file. Native drag-and-drop is coming next.";
 }
 
-async function analyze(file: File) {
+async function analyze(path: string) {
   error.value = "";
-  if (!file.type.startsWith("audio/") && !/\.(wav|mp3|m4a|aac|flac|ogg)$/i.test(file.name)) {
-    error.value = "Choose an audio file (WAV, MP3, AAC, FLAC, or OGG)."; return;
-  }
-  if (audioUrl.value) URL.revokeObjectURL(audioUrl.value);
-  selectedFile.value = file; audioUrl.value = URL.createObjectURL(file); processing.value = true; progress.value = 12;
+  selectedFile.value = { name: path.split(/[\\/]/).pop() ?? path, path }; processing.value = true; progress.value = 12;
   try {
-    const buffer = await file.arrayBuffer(); progress.value = 35;
-    const context = new AudioContext();
-    const decoded = await context.decodeAudioData(buffer); progress.value = 63;
-    duration.value = decoded.duration;
-    let sumSquares = 0, max = 0, count = 0;
-    // Sample up to 4.8m points; enough for a responsive local estimate.
-    const stride = Math.max(1, Math.floor(decoded.length / 4800000));
-    for (let channel = 0; channel < decoded.numberOfChannels; channel++) {
-      const data = decoded.getChannelData(channel);
-      for (let i = 0; i < data.length; i += stride) { const sample = data[i]; sumSquares += sample * sample; max = Math.max(max, Math.abs(sample)); count++; }
-    }
-    const rms = Math.sqrt(sumSquares / count);
-    // RMS offset is a practical browser-only approximation of program loudness, not a replacement for EBU R128 metering.
-    integrated.value = Math.max(-70, 20 * Math.log10(Math.max(rms, 1e-9)) - 0.7);
-    peak.value = 20 * Math.log10(Math.max(max, 1e-9));
-    crest.value = peak.value - integrated.value;
-    await context.close(); progress.value = 100;
-  } catch {
-    error.value = "This file could not be decoded. Try WAV, MP3, AAC, FLAC, or OGG."; selectedFile.value = null;
+    progress.value = 35;
+    const result = await invoke<Analysis>("analyze_audio", { path });
+    progress.value = 90; duration.value = result.durationSeconds; integrated.value = result.integratedLufs; peak.value = result.truePeakDbtp; lra.value = result.loudnessRange; progress.value = 100;
+  } catch (reason) {
+    error.value = typeof reason === "string" ? reason : "This file could not be decoded."; selectedFile.value = null;
   } finally { setTimeout(() => { processing.value = false; }, 300); }
 }
 
-function togglePreview() {
-  if (!player.value) return;
-  if (isPreviewing.value) { player.value.pause(); isPreviewing.value = false; }
-  else { player.value.volume = Math.pow(10, selectedPenalty.value / 20); player.value.play(); isPreviewing.value = true; }
-}
-function reset() { if (audioUrl.value) URL.revokeObjectURL(audioUrl.value); selectedFile.value = null; integrated.value = peak.value = crest.value = null; audioUrl.value = ""; duration.value = 0; error.value = ""; }
-onBeforeUnmount(() => { if (audioUrl.value) URL.revokeObjectURL(audioUrl.value); });
+function reset() { selectedFile.value = null; integrated.value = peak.value = lra.value = null; duration.value = 0; error.value = ""; }
 </script>
 
 <template>
@@ -103,7 +78,6 @@ onBeforeUnmount(() => { if (audioUrl.value) URL.revokeObjectURL(audioUrl.value);
         <h2>Drop your master here</h2>
         <p>WAV, AIFF, MP3, AAC, FLAC, or OGG</p>
         <button class="primary" @click="chooseFile">Choose audio file <span>→</span></button>
-        <input ref="fileInput" type="file" accept="audio/*,.wav,.aiff,.mp3,.m4a,.aac,.flac,.ogg" @change="onFileInput" />
         <small>Your file stays on this device. Always.</small>
       </div>
       <p v-if="error" class="error">{{ error }}</p>
@@ -112,15 +86,15 @@ onBeforeUnmount(() => { if (audioUrl.value) URL.revokeObjectURL(audioUrl.value);
 
     <section v-else class="results-wrap">
       <div class="filebar">
-        <div class="file-icon">♫</div><div><strong>{{ selectedFile.name }}</strong><span>{{ fileSize }} · {{ durationText }}</span></div>
+        <div class="file-icon">♫</div><div><strong>{{ selectedFile.name }}</strong><span>{{ durationText }} · analyzed in Rust</span></div>
         <button class="text-button" @click="reset">Analyze another <span>↗</span></button>
       </div>
       <div v-if="processing" class="processing"><div class="progress"><i :style="{ width: progress + '%' }"></i></div><span>Reading your master locally… {{ progress }}%</span></div>
       <template v-else>
         <div class="metrics">
-          <article><p>INTEGRATED LOUDNESS</p><strong>{{ displayDb(integrated, ' LUFS') }}</strong><span>Approx. program loudness</span></article>
-          <article><p>TRUE PEAK</p><strong>{{ displayDb(peak, ' dBTP') }}</strong><span>Sample peak estimate</span></article>
-          <article><p>CREST FACTOR</p><strong>{{ crest?.toFixed(1) ?? '—' }} <b>dB</b></strong><span>Peak-to-loudness range</span></article>
+          <article><p>INTEGRATED LOUDNESS</p><strong>{{ displayDb(integrated, ' LUFS') }}</strong><span>Gated EBU R128 measurement</span></article>
+          <article><p>TRUE PEAK</p><strong>{{ displayDb(peak, ' dBTP') }}</strong><span>4× oversampled peak scan</span></article>
+          <article><p>LOUDNESS RANGE</p><strong>{{ lra?.toFixed(1) ?? '—' }} <b>LU</b></strong><span>EBU Tech 3342 range</span></article>
         </div>
         <div class="section-title"><div><p class="eyebrow">NORMALIZATION PREVIEW</p><h2>Streaming service impact</h2></div><p>Estimated gain adjustment relative to each<br />platform’s standard playback level.</p></div>
         <div class="service-grid">
@@ -129,12 +103,10 @@ onBeforeUnmount(() => { if (audioUrl.value) URL.revokeObjectURL(audioUrl.value);
           </button>
         </div>
         <div class="preview">
-          <div><p class="eyebrow">A/B PLAYBACK</p><h3>Hear the {{ selectedService }} version</h3><span>Preview applies {{ displayDb(selectedPenalty, ' dB') }} gain locally.</span></div>
+          <div><p class="eyebrow">NORMALIZATION REFERENCE</p><h3>{{ selectedService }} would apply {{ displayDb(selectedPenalty, ' dB') }}</h3><span>Results are calculated locally against the platform target.</span></div>
           <div class="wave"><i v-for="n in 32" :key="n" :style="{ height: (20 + ((n * 31) % 58)) + '%' }"></i></div>
-          <button class="play" @click="togglePreview">{{ isPreviewing ? 'Ⅱ' : '▶' }}</button>
-          <audio ref="player" :src="audioUrl" @ended="isPreviewing = false"></audio>
         </div>
-        <p class="disclaimer">Results use a fast browser-based loudness estimate. Use a certified EBU R128 meter for delivery-critical specifications.</p>
+        <p class="disclaimer">EBU R128 / ITU-R BS.1770 analysis is performed locally in the Rust backend. No audio leaves your device.</p>
       </template>
     </section>
   </main>
