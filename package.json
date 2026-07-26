@@ -1,7 +1,7 @@
 {
   "name": "loudness",
+  "version": "0.0.1",
   "private": true,
-  "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,8 +10,8 @@
     "tauri": "tauri"
   },
   "dependencies": {
-    "vue": "^3.3.4",
-    "@tauri-apps/api": "^1"
+    "@tauri-apps/api": "^1",
+    "vue": "^3.3.4"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^1",
