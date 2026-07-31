@@ -35,6 +35,7 @@ const isPreviewing = ref(false);
 const previewTime = ref(0);
 const waveform = ref<number[]>([]);
 const waveformLoading = ref(false);
+const helpDialog = ref<HTMLDialogElement>();
 let unlistenFileDrop: (() => void) | undefined;
 let audioContext: AudioContext | undefined;
 let gainNodes: GainNode[] = [];
@@ -59,6 +60,14 @@ const waveBars = computed(() =>
 const players = () =>
   [playerA.value, playerB.value].filter((player): player is HTMLAudioElement => Boolean(player));
 const currentPlayer = () => [playerA.value, playerB.value][activeDeck];
+
+function openHelp() {
+  helpDialog.value?.showModal();
+}
+
+function closeHelp() {
+  helpDialog.value?.close();
+}
 
 async function chooseFile() {
   const paths = await open({
@@ -326,8 +335,28 @@ onBeforeUnmount(() => {
         ><span class="brand-mark"><i></i><i></i><i></i></span>LOUD<span>CHECK</span></a
       >
       <div class="local-badge"><span></span> 100% local analysis</div>
-      <button class="help" aria-label="About loudness">?</button>
+      <button class="help" aria-label="How Loudcheck works" @click="openHelp">?</button>
     </header>
+
+    <dialog ref="helpDialog" class="help-dialog" aria-labelledby="help-title">
+      <button class="dialog-close" aria-label="Close help" @click="closeHelp">×</button>
+      <p class="eyebrow">HOW IT WORKS</p>
+      <h2 id="help-title">Loudness, without the upload.</h2>
+      <p>
+        Loudcheck measures your audio on-device using the ITU-R BS.1770 algorithm and the EBU R128
+        recommendation. Integrated loudness uses BS.1770's K-weighting and gating; loudness range
+        (LRA) follows EBU R128; and true peak is reported in dBTP using the same meter.
+      </p>
+      <p>
+        Choose a streaming service to see its likely playback adjustment, then use Preview to hear
+        that adjustment locally.
+      </p>
+      <p class="dialog-note">
+        These are useful mastering references, not a guarantee of every listener's playback
+        settings.
+      </p>
+      <button class="primary dialog-action" @click="closeHelp">Got it <span>→</span></button>
+    </dialog>
 
     <section class="hero">
       <p class="eyebrow">STREAMING LOUDNESS ANALYZER</p>
