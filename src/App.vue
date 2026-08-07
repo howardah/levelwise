@@ -341,7 +341,7 @@ onBeforeUnmount(() => {
     <dialog ref="helpDialog" class="help-dialog" aria-labelledby="help-title">
       <button class="dialog-close" aria-label="Close help" @click="closeHelp">×</button>
       <p class="eyebrow">HOW IT WORKS</p>
-      <h2 id="help-title">Loudness, without the upload.</h2>
+      <h2 id="help-title">Check before you upload.</h2>
       <p>
         Loudcheck measures your audio on-device using the ITU-R BS.1770 algorithm and the EBU R128
         recommendation. Integrated loudness uses BS.1770's K-weighting and gating; loudness range
