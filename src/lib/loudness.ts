@@ -9,6 +9,8 @@ export type Analysis = {
 
 export type Recording = Analysis & { name: string; path: string };
 
+export type PreviewTrack = { name: string; path: string; durationSeconds?: number };
+
 export type StreamingService = {
   service: string;
   target: number;
