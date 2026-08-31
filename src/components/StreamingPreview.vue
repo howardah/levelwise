@@ -1,12 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, toRef } from "vue";
 import { useAudioPreview } from "../composables/useAudioPreview";
-import {
-  formatDb,
-  gainAdjustment,
-  streamingServices,
-  type PreviewTrack,
-} from "../lib/loudness";
+import { formatDb, gainAdjustment, streamingServices, type PreviewTrack } from "../lib/loudness";
 
 const props = defineProps<{
   selectedFile: PreviewTrack;

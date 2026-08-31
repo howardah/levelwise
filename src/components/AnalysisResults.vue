@@ -37,8 +37,9 @@ defineEmits<{
     <div v-if="processing" class="processing" :class="{ 'processing-inline': recordings.length }">
       <div class="progress"><i :style="{ width: progress + '%' }"></i></div>
       <span>
-        Analyzing {{ batchTotal > 1 ? `recording ${batchIndex} of ${batchTotal}` : "your master" }}
-        locally… {{ progress }}%
+        Analyzing
+        {{ batchTotal > 1 ? `recording ${batchIndex} of ${batchTotal}` : "your master" }} locally…
+        {{ progress }}%
       </span>
     </div>
     <template v-if="!processing || recordings.length">

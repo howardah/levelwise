@@ -10,7 +10,9 @@ const helpDialog = ref<HTMLDialogElement>();
       <span class="brand-mark"><i></i><i></i><i></i></span>LOUD<span>CHECK</span>
     </a>
     <div class="local-badge"><span></span> 100% local analysis</div>
-    <button class="help" aria-label="How Loudcheck works" @click="helpDialog?.showModal()">?</button>
+    <button class="help" aria-label="How Loudcheck works" @click="helpDialog?.showModal()">
+      ?
+    </button>
   </header>
 
   <dialog ref="helpDialog" class="help-dialog" aria-labelledby="help-title">

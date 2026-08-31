@@ -29,9 +29,7 @@ export function useAudioPreview(options: AudioPreviewOptions) {
       : Array.from({ length: 80 }, (_, index) => 18 + ((index * 19) % 55)),
   );
   const players = () =>
-    [playerA.value, playerB.value].filter(
-      (player): player is HTMLAudioElement => Boolean(player),
-    );
+    [playerA.value, playerB.value].filter((player): player is HTMLAudioElement => Boolean(player));
   const currentPlayer = () => [playerA.value, playerB.value][activeDeck];
 
   function setPlayerA(element: unknown) {
