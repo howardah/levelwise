@@ -21,7 +21,9 @@
       },
       "protocol": {
         "asset": true,
-        "assetScope": ["**"]
+        "assetScope": [
+          "**"
+        ]
       }
     },
     "windows": [
@@ -46,5 +48,6 @@
         "icons/icon.ico"
       ]
     }
-  }
+  },
+  "version": "0.2.0"
 }

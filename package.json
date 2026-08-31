@@ -1,7 +1,11 @@
 {
   "name": "loudcheck",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": true,
+  "author": {
+    "name": "Adam Thomas Howard",
+    "url": "https://github.com/howardah"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,7 +17,10 @@
     "test:watch": "vitest",
     "typecheck:rust": "cargo check --manifest-path src-tauri/Cargo.toml",
     "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
-    "check": "bun run typecheck && bun run test && bun run typecheck:rust && bun run test:rust"
+    "check": "bun run typecheck && bun run test && bun run typecheck:rust && bun run test:rust",
+    "bump:patch": "bun ./scripts/bump-version.ts patch",
+    "bump:minor": "bun ./scripts/bump-version.ts minor",
+    "bump:major": "bun ./scripts/bump-version.ts major"
   },
   "dependencies": {
     "@tauri-apps/api": "^1",
