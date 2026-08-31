@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 env:
-  RELEASE_TAG_PREFIX: proteus-author-v
+  RELEASE_TAG_PREFIX: loudcheck-v
 
 jobs:
   prepare-release:
@@ -59,16 +59,12 @@ jobs:
         include:
           - platform: macos-14
             target: aarch64-apple-darwin
-          - platform: macos-15-intel
+          - platform: macos-13
             target: x86_64-apple-darwin
           - platform: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
-          - platform: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-gnu
           - platform: windows-latest
             target: x86_64-pc-windows-msvc
-          - platform: windows-11-arm
-            target: aarch64-pc-windows-msvc
 
     runs-on: ${{ matrix.platform }}
 
@@ -90,17 +86,13 @@ jobs:
           sudo apt-get install -y \
             pkg-config \
             libasound2-dev \
-            libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
+            libwebkit2gtk-4.0-dev \
+            libayatana-appindicator3-dev \
             librsvg2-dev \
             patchelf
 
       - name: Install frontend dependencies
         run: bun install --frozen-lockfile
-
-      - name: Install Windows ARM Tauri CLI native binding
-        if: matrix.target == 'aarch64-pc-windows-msvc'
-        run: npm install --no-save --no-package-lock --legacy-peer-deps @tauri-apps/cli-win32-arm64-msvc@2.10.0
 
       - name: Build and publish
         uses: tauri-apps/tauri-action@v0.6.1
@@ -109,7 +101,7 @@ jobs:
         with:
           tauriScript: bun run tauri
           tagName: ${{ env.RELEASE_TAG_PREFIX }}__VERSION__
-          releaseName: "Proteus Author v__VERSION__"
+          releaseName: "LoudCheck v__VERSION__"
           releaseBody: ${{ needs.prepare-release.outputs.release_body }}
           releaseDraft: false
           prerelease: false

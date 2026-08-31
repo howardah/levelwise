@@ -1,6 +1,6 @@
 [changelog]
 header = """
-# Proteus Author
+# LoudCheck
 You can find the binaries associated with this release for Linux, Windows, and macOS on the bottom of the page.
 
 ## Changelog
@@ -24,7 +24,7 @@ trim = true
 conventional_commits = true
 filter_unconventional = false
 split_commits = false
-tag_pattern = "proteus-author-v[0-9].*"
+tag_pattern = "loudcheck-v[0-9].*"
 sort_commits = "oldest"
 
 commit_parsers = [
