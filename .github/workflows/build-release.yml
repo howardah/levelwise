@@ -1,0 +1,146 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+env:
+  RELEASE_TAG_PREFIX: levelwise-v
+
+jobs:
+  prepare-release:
+    runs-on: ubuntu-latest
+    outputs:
+      release_body: ${{ steps.build_notes.outputs.release_body }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read package version
+        id: version
+        run: |
+          VERSION="$(grep -m1 '"version"' package.json | sed -E 's/.*"version": "([^"]+)".*/\1/')"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate release notes
+        id: git_cliff
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --unreleased --tag "${{ env.RELEASE_TAG_PREFIX }}${{ steps.version.outputs.version }}"
+        env:
+          OUTPUT: release-notes.md
+          GITHUB_REPO: ${{ github.repository }}
+
+      - name: Build release notes
+        id: build_notes
+        run: |
+          if [ ! -s release-notes.md ]; then
+            echo "No notable changes in this release." > release-notes.md
+          fi
+
+          DELIM="RELEASE_BODY_$(date +%s)_$RANDOM"
+          {
+            echo "release_body<<${DELIM}"
+            cat release-notes.md
+            echo "${DELIM}"
+          } >> "$GITHUB_OUTPUT"
+
+  publish-tauri:
+    needs: prepare-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-14
+            target: aarch64-apple-darwin
+          - platform: macos-13
+            target: x86_64-apple-darwin
+          - platform: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install Linux system dependencies
+        if: startsWith(matrix.platform, 'ubuntu-')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            pkg-config \
+            libasound2-dev \
+            libwebkit2gtk-4.0-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build and publish
+        uses: tauri-apps/tauri-action@v0.6.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tauriScript: bun run tauri
+          tagName: ${{ env.RELEASE_TAG_PREFIX }}__VERSION__
+          releaseName: "levelwise v__VERSION__"
+          releaseBody: ${{ needs.prepare-release.outputs.release_body }}
+          releaseDraft: false
+          prerelease: false
+          args: --target ${{ matrix.target }}
+
+  publish-downloads-manifest:
+    needs: publish-tauri
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build downloads.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="$(grep -m1 '"version"' package.json | sed -E 's/.*"version": "([^"]+)".*/\1/')"
+          TAG="${RELEASE_TAG_PREFIX}${VERSION}"
+
+          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" > release.json
+
+          jq \
+            --arg version "${VERSION}" \
+            --arg tag "${TAG}" \
+            --arg generated_at "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+            '{
+              version: $version,
+              tag: $tag,
+              release_url: .html_url,
+              generated_at: $generated_at,
+              assets: [
+                .assets[]
+                | select(.name != "downloads.json")
+                | {
+                    name,
+                    size,
+                    content_type,
+                    download_url: .browser_download_url
+                  }
+              ]
+            }' release.json > downloads.json
+
+          gh release upload "${TAG}" downloads.json --clobber

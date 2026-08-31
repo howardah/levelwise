@@ -9,6 +9,8 @@ export type Analysis = {
 
 export type Recording = Analysis & { name: string; path: string };
 
+export type PreviewTrack = { name: string; path: string; durationSeconds?: number };
+
 export type StreamingService = {
   service: string;
   target: number;
@@ -24,7 +26,13 @@ export const streamingServices: StreamingService[] = [
   { service: "Apple Music", target: -16, note: "Sound Check", color: "#ff9d85", canBoost: true },
   { service: "YouTube", target: -14, note: "Music", color: "#fa6b7e", canBoost: false },
   { service: "TIDAL", target: -14, note: "Normal", color: "#c4b5fd", canBoost: false },
-  { service: "Amazon Music", target: -14, note: "Normalization", color: "#65c8ff", canBoost: false },
+  {
+    service: "Amazon Music",
+    target: -14,
+    note: "Normalization",
+    color: "#65c8ff",
+    canBoost: false,
+  },
   { service: "Deezer", target: -15, note: "Normalization", color: "#f6ba65", canBoost: true },
 ];
 

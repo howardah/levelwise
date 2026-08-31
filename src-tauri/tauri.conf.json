@@ -6,8 +6,8 @@
     "distDir": "../dist"
   },
   "package": {
-    "productName": "LoudCheck",
-    "version": "0.1.1"
+    "productName": "levelwise",
+    "version": "0.2.1"
   },
   "tauri": {
     "allowlist": {
@@ -21,12 +21,14 @@
       },
       "protocol": {
         "asset": true,
-        "assetScope": ["**"]
+        "assetScope": [
+          "**"
+        ]
       }
     },
     "windows": [
       {
-        "title": "LoudCheck",
+        "title": "levelwise",
         "width": 1200,
         "height": 800
       }
@@ -37,7 +39,7 @@
     "bundle": {
       "active": true,
       "targets": "all",
-      "identifier": "com.howardah.loudcheck",
+      "identifier": "com.howardah.levelwise",
       "icon": [
         "icons/32x32.png",
         "icons/128x128.png",

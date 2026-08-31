@@ -1,13 +1,35 @@
 {
-  "name": "loudcheck",
-  "version": "0.1.1",
+  "name": "levelwise",
+  "version": "0.2.1",
   "private": true,
+  "author": {
+    "name": "Adam Thomas Howard",
+    "url": "https://github.com/howardah"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "typecheck": "vue-tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck:rust": "cargo check --manifest-path src-tauri/Cargo.toml",
+    "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
+    "fmt:frontend": "oxfmt src scripts package.json vite.config.ts tsconfig.json tsconfig.node.json .oxfmtrc.json .oxlintrc.json index.html README.md",
+    "fmt:frontend:check": "oxfmt --check src scripts package.json vite.config.ts tsconfig.json tsconfig.node.json .oxfmtrc.json .oxlintrc.json index.html README.md",
+    "fmt:rust": "cargo fmt --manifest-path src-tauri/Cargo.toml",
+    "fmt:rust:check": "cargo fmt --manifest-path src-tauri/Cargo.toml -- --check",
+    "fmt": "bun run fmt:frontend && bun run fmt:rust",
+    "fmt:check": "bun run fmt:frontend:check && bun run fmt:rust:check",
+    "lint:frontend": "oxlint --vue-plugin --vitest-plugin src scripts vite.config.ts",
+    "lint:rust": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+    "lint": "bun run lint:frontend && bun run lint:rust",
+    "check": "bun run fmt:check && bun run lint && bun run typecheck && bun run test && bun run typecheck:rust && bun run test:rust",
+    "bump:patch": "bun ./scripts/bump-version.ts patch",
+    "bump:minor": "bun ./scripts/bump-version.ts minor",
+    "bump:major": "bun ./scripts/bump-version.ts major"
   },
   "dependencies": {
     "@tauri-apps/api": "^1",
@@ -15,9 +37,13 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^1",
+    "@types/node": "^26.4.0",
     "@vitejs/plugin-vue": "^5.0.4",
+    "oxfmt": "^0.65.0",
+    "oxlint": "^1.80.0",
     "typescript": "5.6.3",
     "vite": "^5.0.0",
+    "vitest": "^2.1.9",
     "vue-tsc": "^3.3.8"
   }
 }
