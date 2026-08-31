@@ -95,7 +95,7 @@ pub(crate) fn measure_file(mut progress: impl FnMut(u8), path: &Path) -> Result<
         if let Some(total_frames) = total_frames {
             let percentage =
                 ((duration_frames.saturating_mul(95) / total_frames.max(1)) + 2).min(97) as u8;
-            if percentage >= last_progress + 1 {
+            if percentage > last_progress {
                 progress(percentage);
                 last_progress = percentage;
             }

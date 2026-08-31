@@ -64,7 +64,7 @@ const updateTauriConf = (newVersion: string) => {
   const filePath = path.join(ROOT, "src-tauri", "tauri.conf.json");
   const content = fs.readFileSync(filePath, "utf8");
   const json = JSON.parse(content);
-  json.version = newVersion;
+  json.package.version = newVersion;
   fs.writeFileSync(filePath, JSON.stringify(json, null, 2) + "\n");
 };
 

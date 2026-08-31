@@ -16,9 +16,12 @@ Useful checks:
 ```sh
 bun run typecheck       # Vue and TypeScript
 bun run test            # Frontend unit tests
+bun run fmt             # Format Vue/TypeScript and Rust
+bun run fmt:check       # Check formatting without changing files
+bun run lint            # Run Oxlint and Clippy
 bun run typecheck:rust  # Rust compiler checks
 bun run test:rust       # Rust unit tests
-bun run check           # All of the above
+bun run check           # All non-mutating checks
 ```
 
 ## Project structure
