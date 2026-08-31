@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 env:
-  RELEASE_TAG_PREFIX: loudcheck-v
+  RELEASE_TAG_PREFIX: levelwise-v
 
 jobs:
   prepare-release:
@@ -101,7 +101,7 @@ jobs:
         with:
           tauriScript: bun run tauri
           tagName: ${{ env.RELEASE_TAG_PREFIX }}__VERSION__
-          releaseName: "LoudCheck v__VERSION__"
+          releaseName: "levelwise v__VERSION__"
           releaseBody: ${{ needs.prepare-release.outputs.release_body }}
           releaseDraft: false
           prerelease: false

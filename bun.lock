@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "loudness",
+      "name": "levelwise",
       "dependencies": {
         "@tauri-apps/api": "^1",
         "vue": "^3.3.4",

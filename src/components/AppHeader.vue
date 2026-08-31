@@ -7,10 +7,10 @@ const helpDialog = ref<HTMLDialogElement>();
 <template>
   <header class="topbar">
     <a class="brand" href="#">
-      <span class="brand-mark"><i></i><i></i><i></i></span>LOUD<span>CHECK</span>
+      <span class="brand-mark"><i></i><i></i><i></i></span>level<span>wise</span>
     </a>
     <div class="local-badge"><span></span> 100% local analysis</div>
-    <button class="help" aria-label="How Loudcheck works" @click="helpDialog?.showModal()">
+    <button class="help" aria-label="How levelwise works" @click="helpDialog?.showModal()">
       ?
     </button>
   </header>
@@ -20,7 +20,7 @@ const helpDialog = ref<HTMLDialogElement>();
     <p class="eyebrow">HOW IT WORKS</p>
     <h2 id="help-title">Check before you upload.</h2>
     <p>
-      Loudcheck measures your audio on-device using the ITU-R BS.1770 algorithm and the EBU R128
+      levelwise measures your audio on-device using the ITU-R BS.1770 algorithm and the EBU R128
       recommendation. Integrated loudness uses BS.1770's K-weighting and gating; loudness range
       (LRA) follows EBU R128; and true peak is reported in dBTP using the same meter.
     </p>

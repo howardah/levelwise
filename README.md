@@ -1,6 +1,6 @@
-# Loudcheck
+# levelwise
 
-Loudcheck is a streaming loudness analyzer built with Vue, Tauri, and Rust. It is inspited by the [Loudness Penalty](https://www.loudnesspenalty.com/) but built as a (fast) local desktop application. Audio is decoded and measured on-device using EBU R128 / ITU-R BS.1770.
+levelwise is a streaming loudness analyzer built with Vue, Tauri, and Rust. It is inspited by the [Loudness Penalty](https://www.loudnesspenalty.com/) but built as a (fast) local desktop application. Audio is decoded and measured on-device using EBU R128 / ITU-R BS.1770.
 
 ## Development
 
