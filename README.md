@@ -2,6 +2,8 @@
 
 levelwise is a streaming loudness analyzer built with Vue, Tauri, and Rust. It is inspited by the [Loudness Penalty](https://www.loudnesspenalty.com/) but built as a (fast) local desktop application. Audio is decoded and measured on-device using EBU R128 / ITU-R BS.1770.
 
+![The levelwise interface](screenshots/Screenshot-2026-09-11.png)
+
 ## Development
 
 Install dependencies and start the Tauri application:
